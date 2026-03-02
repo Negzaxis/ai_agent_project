@@ -1,4 +1,6 @@
 import os
+from google import genai
+from google.genai import types
 
 def get_files_info(working_directory, directory="."):
     """
@@ -34,3 +36,73 @@ def get_files_info(working_directory, directory="."):
     except Exception as e:
         return f"Error: {e}"
 
+
+#google-genai standard format to descibe a function for LLM callers: types.FunctionDeclaration
+#use it to build a schema for our functions, tells the LLM how the function should be called
+
+#first schema for get_files_info -> given to us
+schema_get_files_info = types.FunctionDeclaration(
+    name="get_files_info",
+    description="Lists files in a specified directory relative to the working directory, providing file size and directory status",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "directory": types.Schema(
+                type=types.Type.STRING,
+                description="Directory path to list files from, relative to the working directory (default is the working directory itself)",
+            ),
+        },
+    ),
+)
+
+#add schema -> get_file_content
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Get the contents of a file",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path of the file to read, relative to the working directory",
+            )
+        },
+        required=["file_path"],
+    ),
+)
+
+#add schema -> run_python_file
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Run a Python file",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path of the Python file to run, relative to the working directory",
+            )
+        },
+        required=["file_path"],
+    ),
+)
+
+#add schema -> write_file
+schema_write_file = types.FunctionDeclaration(
+    name="write_file",
+    description="Write or create a file with specified content",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path of the file to write, relative to the working directory",
+            ),
+            "content": types.Schema(
+                type=types.Type.STRING,
+                description="Content to write to the file",
+            ),
+        },
+        required=["file_path", "content"],
+    ),
+)

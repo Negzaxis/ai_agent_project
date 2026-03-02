@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import argparse
+from prompts import system_prompt
+from functions import call_functions
+from functions.call_functions import *
 
 
 load_dotenv()
@@ -33,14 +36,41 @@ args = parser.parse_args()
 messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
 def main():
-    print("Hello from ai-agent-project!")
     response = client.models.generate_content(
-        model='gemini-2.5-flash', contents=messages
+        model='gemini-2.5-flash', 
+        contents=messages,
+        config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt, temperature=0),
     )
     if args.verbose:
         print(f"User prompt: {args.user_prompt}")
         usage_data(response)
-    print(response.text)
+
+    function_call_list = response.function_calls or []
+    function_results = []
+    
+    if function_call_list:
+        for function_call in function_call_list:
+            function_call_result = call_function(function_call, verbose=args.verbose)
+            
+            # Validate the response structure
+            if not function_call_result.parts:
+                raise RuntimeError("Function call result has no parts")
+            
+            func_response = function_call_result.parts[0].function_response
+            if func_response is None:
+                raise RuntimeError("Function response is None")
+            
+            if func_response.response is None:
+                raise RuntimeError("Function response.response is None")
+            
+            # Add the part to results list
+            function_results.append(function_call_result.parts[0])
+            
+            # Print result if verbose
+            if args.verbose:
+                print(f"-> {func_response.response}")
+    else:    
+        print(response.text)
 
 if __name__ == "__main__":
     main()
