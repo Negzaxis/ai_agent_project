@@ -36,41 +36,67 @@ args = parser.parse_args()
 messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
 def main():
-    response = client.models.generate_content(
-        model='gemini-2.5-flash', 
-        contents=messages,
-        config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt, temperature=0),
-    )
     if args.verbose:
         print(f"User prompt: {args.user_prompt}")
-        usage_data(response)
-
-    function_call_list = response.function_calls or []
-    function_results = []
     
-    if function_call_list:
-        for function_call in function_call_list:
-            function_call_result = call_function(function_call, verbose=args.verbose)
+    # Loop for agent iterations
+    max_iterations = 20
+    for iteration in range(max_iterations):
+        if args.verbose:
+            print(f"\n--- Iteration {iteration + 1} ---")
+        
+        # Call the model
+        response = client.models.generate_content(
+            model='gemini-2.5-flash', 
+            contents=messages,
+            config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt, temperature=0),
+        )
+        
+        if args.verbose:
+            usage_data(response)
+        
+        # Add candidates to conversation history
+        if response.candidates:
+            for candidate in response.candidates:
+                if candidate.content:
+                    messages.append(candidate.content)
+        
+        # Check for function calls
+        function_call_list = response.function_calls or []
+        function_results = []
+        
+        if function_call_list:
+            for function_call in function_call_list:
+                function_call_result = call_function(function_call, verbose=args.verbose)
+                
+                # Validate the response structure
+                if not function_call_result.parts:
+                    raise RuntimeError("Function call result has no parts")
+                
+                func_response = function_call_result.parts[0].function_response
+                if func_response is None:
+                    raise RuntimeError("Function response is None")
+                
+                if func_response.response is None:
+                    raise RuntimeError("Function response.response is None")
+                
+                # Add the part to results list
+                function_results.append(function_call_result.parts[0])
+                
+                # Print result if verbose
+                if args.verbose:
+                    print(f"-> {func_response.response}")
             
-            # Validate the response structure
-            if not function_call_result.parts:
-                raise RuntimeError("Function call result has no parts")
-            
-            func_response = function_call_result.parts[0].function_response
-            if func_response is None:
-                raise RuntimeError("Function response is None")
-            
-            if func_response.response is None:
-                raise RuntimeError("Function response.response is None")
-            
-            # Add the part to results list
-            function_results.append(function_call_result.parts[0])
-            
-            # Print result if verbose
-            if args.verbose:
-                print(f"-> {func_response.response}")
-    else:    
-        print(response.text)
+            # Add function results to messages for next iteration
+            messages.append(types.Content(role="user", parts=function_results))
+        else:
+            # No function calls - model has final response
+            print(response.text)
+            break
+    else:
+        # Loop completed without break (max iterations reached)
+        print("Error: Maximum iterations reached. Agent did not produce a final response.")
+        exit(1)
 
 if __name__ == "__main__":
     main()
